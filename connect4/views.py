@@ -1,3 +1,4 @@
+import copy
 from typing import List, Any
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
@@ -15,21 +16,58 @@ def index(request):
 
     blank_board = [[0 for x in range(7)] for y in range(6)]
     start = State(blank_board)
-    current_state = start
+
+    # TODOs:
+    # - Make it so it logs every other turn
+    # - Setup State object correctly
+    # - Populate state props correctly
+    # - State for "win", "lose", and "tie"
+    # - Work on back propagating...
+    # -
+
+    # State Specs:
+    # - ID
+    # - State: In this case it's the 2d array representing the board
+    # - Array that's an Actions tuple (Action Id, State, Probability)
+        # - Calculate each action as -1, back propagate from goal state
+    # - State Array - an array of all states that link from this
+    # - Probability - an array of the probability corresponding to a state
 
     all_states = []
     with open(path) as f:
         test_list: List[Any] = list(csv.reader(f))
         for x in test_list:
+            current_state = copy.deepcopy(start);
             starting_player = x[0]
             winning_player = x[1]
+            #Here you can easily grab condition for win/lose/tie
+            # gross way, but for now...
+            i = 3
             for item in x[2:]:
-                board = current_state.get_state()
-                #item is '5,4'
-                board[int(item.split(',')[0])][int(item.split(',')[1])] = 2
-                s = State(board)
-                current_state = s
-                all_states.append(s)
+                if i % 2 == 1: #need an "else if last index.."
+                    board = current_state.get_state()
+                    try:
+                        player_x = int(item.split(',')[0])
+                        player_y = int(item.split(',')[1])
+                        board[player_x][player_y] = 1
+                        opponent_x = int(x[i].split(',')[0])
+                        opponent_y = int(x[i].split(',')[1])
+                        board[opponent_x][opponent_y] = 2
+                        s = State(board)
+                        current_state = s
+                        all_states.append(s)
+                    except ValueError as verr:
+                        break
+                    except IndexError as ie:
+                        #Starting player wins
+                        player_x = int(item.split(',')[0])
+                        player_y = int(item.split(',')[1])
+                        board[player_x][player_y] = 1
+                        s = State(board)
+                        current_state = s
+                        all_states.append(s)
+
+                i = i + 1
                 breakPoint = "here"
 
     context = {'latest_question_list': latest_question_list,
