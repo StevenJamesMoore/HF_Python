@@ -8,7 +8,7 @@ from django.utils import timezone
 
 # Create your models here.
 
-class State(models.Model):
+class Statex(models.Model):
     board = models.TextField(max_length = 100)
     actions = models.CharField(validators=[validate_comma_separated_integer_list], max_length=30, blank=True, null=True)
 
