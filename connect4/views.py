@@ -29,13 +29,17 @@ def index(request):
             current_state = start_state
             starting_player = x[0]
             winning_player = x[1]
+            if '' in x:
+                moves_this_game = (x.index('') - 2) // 2  # Remove 2 for the first 2 columns (who started, who won), and -1 for arr
+            else:
+                moves_this_game = 42  # Max amount of moves in a 6x7 game of Connect-4
 
             if winning_player == 3:
-                won = 3  # Tie game
+                won = 0  # Tie game
             elif winning_player == starting_player:
-                won = 1  # Starting player won
+                won = 100  # Starting player won
             else:
-                won = -1  # Starting player lost
+                won = -100  # Starting player lost
 
             i = 3  # Start i at 3 since the first two columns are who started and won. The third column is x from below.
             for item in x[2::2]:
@@ -46,10 +50,12 @@ def index(request):
                     board = copy.deepcopy(current_state.board)
                     add_piece_to_board(board, item, 1)
                     action = int(item.split(',')[1])
+                    reward = won - moves_this_game
                     if x[i]:
                         add_piece_to_board(board, x[i], 2)
-                    current_state = existing_board_state(board, current_state, all_states, action, state_id)
+                    current_state = existing_board_state(board, current_state, all_states, action, state_id, reward)
                 i = i + 2  # Increment by 2 since x is the players move and i is getting the following (opp) move
+                moves_this_game = moves_this_game - 1
             # END: for item in x[2::2]:
         # END: for x in test_list:
 
@@ -67,7 +73,7 @@ def add_piece_to_board(board, coords, piece):
 # If this board state already exists in our model, find it and make new_state it.
 # Point our current_state to it, modify current_state's transition + action accordingly.
 # Make our current_state this existing state (assigned to new_state) and continue.
-def existing_board_state(board, current_state, all_states, action, state_id):
+def existing_board_state(board, current_state, all_states, action, state_id, reward):
     if repr(board) in all_states:
         new_state = all_states[repr(board)]
         # Check to see if it's already been linked from current_state
@@ -75,16 +81,22 @@ def existing_board_state(board, current_state, all_states, action, state_id):
             # We need to modify the transition accordingly
             ind = current_state.next_states.index(new_state)
             current_state.transitions[ind] = current_state.transitions[ind] + 1
+            # Since this action is already linked to the new_state, see if this reward is bigger and overwrite
+            if current_state.rewards[ind] < reward:
+                current_state.rewards[ind] = reward
         else:
             current_state.add_next_state(new_state)
             current_state.add_action(action)
+            current_state.add_reward(reward)
             current_state.add_transition(1)
     else:
         new_state = State(board, state_id)
-        new_state.reward = 1
+        #  new_state.reward = 1
         current_state.add_next_state(new_state)
         current_state.add_action(action)
+        current_state.add_reward(reward)
         current_state.add_transition(1)
+        # TODO: Set the current_states value to be the max reward from rewards
         all_states[repr(new_state.board)] = new_state
 
     return new_state
@@ -122,6 +134,7 @@ class State:
         self._next_states = []
         self._actions = []
         self._transitions = []
+        self._rewards = []
         self._reward = 0
 
     def add_transition(self, num):
@@ -129,6 +142,9 @@ class State:
 
     def add_next_state(self, state):
         self._next_states.append(state)
+
+    def add_reward(self, reward):
+        self._rewards.append(reward)
 
     # At most times there's always ONLY 7 moves (column 0 - 6)
     def add_action(self, num):
@@ -145,6 +161,10 @@ class State:
     @property
     def transitions(self):
         return self._transitions
+
+    @property
+    def rewards(self):
+        return self._rewards
 
     @property
     def id(self):
