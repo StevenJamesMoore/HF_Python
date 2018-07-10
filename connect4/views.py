@@ -8,12 +8,11 @@ import os.path
 import collections as ct
 from .models import Question, Choice
 
-
 def index(request):
     latest_question_list = Question.objects.order_by('-pub_date')[:5]
 
     my_path = os.path.abspath(os.path.dirname(__file__))
-    path = os.path.join(my_path, "../data/datasetone.csv")
+    path = os.path.join(my_path, "../data/all_data.csv")
 
     blank_board = [[0 for x in range(7)] for y in range(6)]
     start_state = State(blank_board, 0)
@@ -30,10 +29,12 @@ def index(request):
             starting_player = x[0]
             winning_player = x[1]
             if '' in x:
-                moves_this_game = (x.index('') - 2) // 2  # Remove 2 for the first 2 columns (who started, who won), and -1 for arr
+                moves_this_game = (x.index(
+                    '') - 2) // 2  # Remove 2 for the first 2 columns (who started, who won), and -1 for arr
             else:
-                moves_this_game = 42  # Max amount of moves in a 6x7 game of Connect-4
+                moves_this_game = 42 // 2  # Max amount of moves in a 6x7 game of Connect-4
 
+            total_move_count = total_move_count + moves_this_game
             if winning_player == 3:
                 won = 0  # Tie game
             elif winning_player == starting_player:
@@ -59,6 +60,8 @@ def index(request):
             # END: for item in x[2::2]:
         # END: for x in test_list:
 
+    setup_rewards(all_states)
+
     context = {'latest_question_list': latest_question_list,
                'test_list': data_rows}
     return render(request, 'connect4/index.html', context)
@@ -80,10 +83,12 @@ def existing_board_state(board, current_state, all_states, action, state_id, rew
         if current_state.next_states.__contains__(new_state):
             # We need to modify the transition accordingly
             ind = current_state.next_states.index(new_state)
-            current_state.transitions[ind] = current_state.transitions[ind] + 1
-            # Since this action is already linked to the new_state, see if this reward is bigger and overwrite
-            if current_state.rewards[ind] < reward:
-                current_state.rewards[ind] = reward
+            curr_trans = current_state.transitions[ind]
+            updated_trans = curr_trans + 1
+            updated_reward = (current_state.rewards[ind] * (curr_trans / updated_trans)) + (
+                        reward * (1 / updated_trans))
+            current_state.transitions[ind] = updated_trans
+            current_state.rewards[ind] = updated_reward
         else:
             current_state.add_next_state(new_state)
             current_state.add_action(action)
@@ -91,15 +96,40 @@ def existing_board_state(board, current_state, all_states, action, state_id, rew
             current_state.add_transition(1)
     else:
         new_state = State(board, state_id)
-        #  new_state.reward = 1
         current_state.add_next_state(new_state)
         current_state.add_action(action)
         current_state.add_reward(reward)
         current_state.add_transition(1)
-        # TODO: Set the current_states value to be the max reward from rewards
         all_states[repr(new_state.board)] = new_state
 
     return new_state
+
+
+def setup_rewards(all_states):
+    actions = [0, 1, 2, 3, 4, 5, 6]
+    for state in all_states.values():
+        action_index_pairings = {x: [i for i, value in enumerate(state.actions) if value == x] for x in actions}
+        highest_action = 0
+        for key in action_index_pairings.keys():  # reaching the keys of dict
+            action_count = 0
+            for ind in action_index_pairings[key]:
+                action_count = action_count + state.transitions[ind]
+            action_reward = 0
+            for ind in action_index_pairings[key]:  # values
+                prob = state.transitions[ind]
+                reward = state.rewards[ind]
+                action_reward = action_reward + (reward * (prob / action_count))
+
+            if action_reward == highest_action:
+                # This is where policy could come in to decide what to do if a tie occurs
+                # Currently, if there's something that's equal to the current highest action, just keep the original
+                continue
+            if action_reward > highest_action:
+                highest_action = action_reward
+                state.reward = highest_action
+                state.best_action = key
+
+            state.add_action_reward(action_reward)
 
 
 def detail(request, question_id):
@@ -135,7 +165,9 @@ class State:
         self._actions = []
         self._transitions = []
         self._rewards = []
+        self._action_rewards = []
         self._reward = 0
+        self._best_action = -1
 
     def add_transition(self, num):
         self._transitions.append(num)
@@ -145,6 +177,9 @@ class State:
 
     def add_reward(self, reward):
         self._rewards.append(reward)
+
+    def add_action_reward(self, action_reward):
+        self._action_rewards.append(action_reward)
 
     # At most times there's always ONLY 7 moves (column 0 - 6)
     def add_action(self, num):
@@ -167,6 +202,10 @@ class State:
         return self._rewards
 
     @property
+    def action_rewards(self):
+        return self._action_rewards
+
+    @property
     def id(self):
         return self._id
 
@@ -181,6 +220,14 @@ class State:
     @reward.setter
     def reward(self, value):
         self._reward = value
+
+    @property
+    def best_action(self):
+        return self._best_action
+
+    @best_action.setter
+    def best_action(self, value):
+        self._best_action = value
 
     @property
     def board(self):
