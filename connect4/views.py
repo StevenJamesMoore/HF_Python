@@ -7,6 +7,8 @@ import csv
 import os.path
 import collections as ct
 from .models import Question, Choice
+from graphviz import Digraph
+
 
 def index(request):
     latest_question_list = Question.objects.order_by('-pub_date')[:5]
@@ -15,7 +17,18 @@ def index(request):
     path = os.path.join(my_path, "../data/all_data.csv")
 
     blank_board = [[0 for x in range(7)] for y in range(6)]
+
     start_state = State(blank_board, 0)
+
+    dot = Digraph(comment='The Round Table')
+    dot.node('A',  '[0000000]\\n[0000000]\\n[0000000]\\n[0000000]\\n[0000000]\\n[0000000]')
+    dot.node('B', '[0000000]\\n[0000000]\\n[0000000]\\n[0000000]\\n[0000000]\\n[0001000]')
+    dot.node('L', '[0000000]\\n[0000000]\\n[0000000]\\n[0000000]\\n[0000000]\\n[0100000]')
+    dot.edge('A', 'B', label='26') # ['AB', 'AL'])
+    dot.edge('A', 'L', label='22')
+    # dot.edge('B', 'L', constraint='false')
+    print(dot.source)
+    dot.render('test-output/round-table.gv', view=True)
 
     # Make a dictionary, create the first entry to be the blank (starting) board state.
     # Keys are string representations of the 2D array representing the board, since you can't have a 2D arr as a key
@@ -86,7 +99,7 @@ def existing_board_state(board, current_state, all_states, action, state_id, rew
             curr_trans = current_state.transitions[ind]
             updated_trans = curr_trans + 1
             updated_reward = (current_state.rewards[ind] * (curr_trans / updated_trans)) + (
-                        reward * (1 / updated_trans))
+                    reward * (1 / updated_trans))
             current_state.transitions[ind] = updated_trans
             current_state.rewards[ind] = updated_reward
         else:
